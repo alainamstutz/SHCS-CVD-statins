@@ -1,6 +1,6 @@
 ---
 title: "NUDGE cluster randomized trial"
-author: "A.Amstutz"
+author: "B. Surial, A. Boyd, A.Amstutz"
 format:
   html:
     toc: true
@@ -27,43 +27,48 @@ Nudging intervention on the level of SHCS physicians at SHCS sites to promote st
 
 -   Cluster eligibility:
 
-    -   SHCS physicians
+    -   SHCS physicians who use Django
 
-    -   From xxx sites
+    -   Saw at least 5 elig pat in the previous year
+
+    -   Are not planning to move out of the site within coming 6m
 
 -   Individual eligibility:
 
-    -   XXX
+    -   Age ≥40 years and ≤75 years
+    -   Receiving antiretroviral therapy
+    -   Currently not receiving a statin
+    -   No documented intolerance, allergy, or adverse reaction towards statins
+    -   Not pregnant or breastfeeding
+    -   For primary analysis population (powered): No prior CVD or diabetes
 
--   Primary outcome (binary): “being prescribed a statin at first patient-encounter”
+-   Primary outcome (binary): “being prescribed a statin within 6m after first patient-encounter”
 
 -   Unit of data collection with be the SHCS cohort participants, but level of inference will be the physicians, i.e. cluster-average
 
 -   Baseline primary outcome rate, see calculation below:
 
-    -   ca. 20%
+    -   ca. 22%
 
 -   Expected delta:
 
-    -   10 pp ?
+    -   15 pp (based on JAMA + a bit more to be expected due to difference in providers & nudge
 
 -   Cluster size (m) of eligible overall participants, see calculation below:
 
-    -   on average 20 eligible participants per physician-cluster
+    -   on average 33 eligible participants per physician-cluster
 
 -   CV (coefficient of variation), see calculation below:
 
-    -   0.90
+    -   0.95
 
 -   ICC for the primary outcome, see calculation below:
 
-    -   0.10
+    -   0.07 (take conservative 0.10 for now)
 
--   Max. ca. ??? eligible clusters, i.e. ??? clusters per arm
+-   Max. ca. 170 eligible clusters
 
 -   Min. desired power 80%, two-sided alpha of 0.05
-
--   1:1 allocation
 
 **Packages & seed**
 
@@ -103,13 +108,13 @@ set.seed(20250809)
 ::: {.cell}
 
 ```{.r .cell-code}
-df_strict <- readRDS(here("01-strict_selection.rds"))
-df_liberal <- readRDS(here("01-liberal_selection.rds"))
+df_ev <- readRDS(here("01-eligible_visits25.rds"))
+df_vpp <- readRDS(here("01-visits_per_physician25.rds"))
 
 # Remove any existing grouping
-df_strict <- df_strict |> 
+df_ev <- df_ev |> 
   ungroup()
-df_liberal <- df_liberal |> 
+df_vpp <- df_vpp |> 
   ungroup()
 ```
 :::
@@ -121,21 +126,21 @@ df_liberal <- df_liberal |>
 ::: {.cell}
 
 ```{.r .cell-code}
-# # Keep only physicians who have at least seen 10 pat
-# df_strict <- df_strict |>
-#   filter(n_elig_study >= 10)
+# # Keep only physicians who have at least seen 5 pat in past year
+df_vpp <- df_vpp |>
+  filter(n_without_statin >= 5)
 
 # Calculate CV for cluster sizes (=physicians)
-# CV = sd(n_elig_study) / mean(n_elig_study)
-cv_strict <- df_strict |>
+# CV = sd(n_without_statin) / mean(n_without_statin)
+cv_tbl <- df_vpp |>
   summarise(
     n_clusters = n(),
-    mean_cluster_size = mean(n_elig_study),
-    sd_cluster_size = sd(n_elig_study),
+    mean_cluster_size = mean(n_without_statin),
+    sd_cluster_size = sd(n_without_statin),
     cv = sd_cluster_size / mean_cluster_size
   )
 
-cv_strict |>
+cv_tbl |>
   gt() |>
   cols_label(
     n_clusters = "Number of Clusters",
@@ -617,10 +622,10 @@ cv_strict |>
     </tr>
   </thead>
   <tbody class="gt_table_body">
-    <tr><td headers="n_clusters" class="gt_row gt_right">229</td>
-<td headers="mean_cluster_size" class="gt_row gt_right">21.60</td>
-<td headers="sd_cluster_size" class="gt_row gt_right">29.15</td>
-<td headers="cv" class="gt_row gt_right">1.35</td></tr>
+    <tr><td headers="n_clusters" class="gt_row gt_right">171</td>
+<td headers="mean_cluster_size" class="gt_row gt_right">33.88</td>
+<td headers="sd_cluster_size" class="gt_row gt_right">32.18</td>
+<td headers="cv" class="gt_row gt_right">0.95</td></tr>
   </tbody>
   
   
@@ -639,18 +644,18 @@ cv_strict |>
 
 ```{.r .cell-code}
 # Calculate number of eligible patients who received statins
-df_strict <- df_strict |>
-  mutate(n_elig_received_statin = round(statin_presc_rate * n_elig_study))
+df_vpp <- df_vpp |>
+  mutate(n_with_statin = n_overall - n_without_statin)
 
 # Reconstruct individual patient data (only eligible patients)
-individual_data <- df_strict |>
+individual_data <- df_vpp |>
   rowwise() |>
   mutate(
     patient_data = list(
       tibble(
         statin_prescribed = c(
-          rep(1, n_elig_received_statin),
-          rep(0, n_elig_study - n_elig_received_statin)
+          rep(1, n_with_statin),
+          rep(0, n_without_statin)
         )
       )
     )
@@ -683,7 +688,7 @@ baseline_rate
 # A tibble: 1 × 1
   baseline_rate
           <dbl>
-1         0.218
+1         0.221
 ```
 
 
@@ -703,8 +708,8 @@ icc(model)
 ```
 # Intraclass Correlation Coefficient
 
-    Adjusted ICC: 0.058
-  Unadjusted ICC: 0.058
+    Adjusted ICC: 0.068
+  Unadjusted ICC: 0.068
 ```
 
 
@@ -721,10 +726,9 @@ Sample size for the individual randomized trial on the same question
 
 ```{.r .cell-code}
 # Parameters
-p_C <- 0.20
-p_I <- 0.30
+p_C <- 0.22
+p_I <- 0.37
 power <- 0.80 
-ICC <- 0.10
 alpha <- 0.05
 
 # Effect size, standardized as Cohen's h
@@ -735,7 +739,7 @@ cat("Cohen's h for Intervention vs Control:", round(h_I_C, 3), "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Cohen's h for Intervention vs Control: 0.232 
+Cohen's h for Intervention vs Control: 0.331 
 ```
 
 
@@ -753,7 +757,7 @@ cat("Sample size per arm:", n_per_arm, "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Sample size per arm: 292 
+Sample size per arm: 143 
 ```
 
 
@@ -766,7 +770,7 @@ cat("Total trial sample size (2-arm trial):", n_total)
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Total trial sample size (2-arm trial): 584
+Total trial sample size (2-arm trial): 286
 ```
 
 
@@ -789,14 +793,14 @@ DEFF_cv = 1+((m(1+CV\^2)−1))ICC , whereby CV is the coefficient of variation (
 
 ```{.r .cell-code}
 # Parameters
-p_C <- 0.20
-p_I <- 0.30  
+p_C <- 0.22
+p_I <- 0.37  
 power <- 0.80 
 ICC <- 0.10
 alpha <- 0.05
 
-m <- 20 # average cluster size
-CV <- 0.90 # CV
+m <- 33 # average cluster size
+CV <- 0.95 # CV
 
 deff <- 1+(m-1)*ICC # standard DEFF
 deff_cv <- 1+((m*(1+CV^2))-1)*ICC # DEFF with cluster size variation
@@ -816,7 +820,7 @@ cat("Cluster sample size one arm:", n_clusters, "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Cluster sample size one arm: 66 
+Cluster sample size one arm: 32 
 ```
 
 
@@ -834,7 +838,7 @@ cat("Total cluster sample size:", tot_clusters, "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Total cluster sample size: 132 
+Total cluster sample size: 64 
 ```
 
 
@@ -847,7 +851,7 @@ cat("Total individual sample size:", tot_ind, "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Total individual sample size: 2638 
+Total individual sample size: 2054 
 ```
 
 
@@ -861,11 +865,11 @@ Total individual sample size: 2638
 
 3-D plot, varying the effect size (10 pp to 20 pp) & varying ICC (0.05 to 0.2)
 
-Keep the baseline prescription rate at 20% (control rate)
+Keep the baseline prescription rate at 22% (control rate)
 
-Keep m (cluster size) at 20
+Keep m (cluster size) at 33
 
-Keep the CV at 0.9
+Keep the CV at 0.95
 
 
 ::: {.cell}
@@ -874,9 +878,9 @@ Keep the CV at 0.9
 # Define parameters
 power <- 0.80
 alpha <- 0.05
-p_C <- 0.20
-CV <- 0.9
-m <- 20
+p_C <- 0.22
+CV <- 0.95
+m <- 33
 
 # Ranges
 ICC_values <- seq(0.05, 0.20, by = 0.01)
@@ -956,11 +960,11 @@ ggplot(results_3d, aes(x = effect_size_pp, y = ICC, fill = n_clusters_per_arm)) 
 
 ### **(1.1.2) Varying CV and varying ICC**
 
-3-D plot, varying the CV (0.3 to 1.4) & varying ICC (0.05 to 0.2)
+3-D plot, varying the CV (0.5 to 1.2) & varying ICC (0.05 to 0.2)
 
-Keep the baseline prescription rate at 20% (control rate) and delta at 10 pp
+Keep the baseline prescription rate at 22% (control rate) and delta at 15 pp
 
-Keep m (cluster size) at 20
+Keep m (cluster size) at 33
 
 
 ::: {.cell}
@@ -969,13 +973,13 @@ Keep m (cluster size) at 20
 # Define parameters
 power <- 0.80
 alpha <- 0.05
-p_C <- 0.20
-delta_pp <- 10
-m <- 20
+p_C <- 0.22
+delta_pp <- 15
+m <- 33
 
 # Ranges
 ICC_values <- seq(0.05, 0.20, by = 0.01)
-CV_values <- seq(0.3, 1.4, by = 0.1)
+CV_values <- seq(0.5, 1.2, by = 0.05)
 
 # Create grid
 results_3d <- expand.grid(
@@ -1025,7 +1029,7 @@ ggplot(results_3d, aes(x = CV, y = ICC, fill = n_clusters_per_arm)) +
     name = "Clusters\nper arm"
   ) +
   labs(
-    title = "Clusters per arm: ICC vs CV (Effect size = 10pp)",
+    title = "Clusters per arm: ICC vs CV (Effect size = 15pp)",
     x = "Coefficient of Variation (CV)",
     y = "ICC"
   ) +
@@ -1034,7 +1038,7 @@ ggplot(results_3d, aes(x = CV, y = ICC, fill = n_clusters_per_arm)) +
     legend.position = "right",
     plot.title = element_text(hjust = 0.5, face = "bold")
   ) +
-  scale_x_continuous(breaks = seq(0.3, 1.4, by = 0.1)) +
+  scale_x_continuous(breaks = seq(0.5, 1.2, by = 0.05)) +
   scale_y_continuous(breaks = seq(0.05, 0.20, by = 0.01))
 ```
 

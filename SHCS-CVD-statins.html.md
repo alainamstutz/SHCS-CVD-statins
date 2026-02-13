@@ -48,23 +48,29 @@ Nudging intervention on the level of SHCS physicians at SHCS sites to promote st
 
 -   Baseline primary outcome rate, see calculation below:
 
-    -   ca. 22%
+    -   Overall: 22%
+    -   Women: 15%
+    -   Men: 25%
 
 -   Expected delta:
 
-    -   15 pp (based on JAMA + a bit more to be expected due to difference in providers & nudge
+    -   Overall: 10-15 pp (based on JAMA + a bit more to be expected due to difference in providers & nudge)
+    -   Slightly better effect among women than men (but probably not more than 5pp)
 
--   Cluster size (m) of eligible overall participants, see calculation below:
+-   Cluster size (m) of eligible participants, see calculation below:
 
-    -   on average 33 eligible participants per physician-cluster
+    -   Overall: 34 eligible participants per physician-cluster
+    -   Women: 14 eligible participants per physician-cluster
 
 -   CV (coefficient of variation), see calculation below:
 
-    -   0.95
+    -   Overall: 0.95
+    -   Women: 0.73
 
 -   ICC for the primary outcome, see calculation below:
 
-    -   0.07 (take conservative 0.10 for now)
+    -   Overall: 0.07 (take conservative 0.10)
+    -   Women: 0.03 (take conservative 0.05)
 
 -   Max. ca. 170 eligible clusters
 
@@ -116,6 +122,51 @@ df_ev <- df_ev |>
   ungroup()
 df_vpp <- df_vpp |> 
   ungroup()
+
+# Get data by physician and SEX
+df_vpp_sex <- df_ev |> 
+  # Get to distinct participant-id pairs
+  # NOTE: individuals who had a visit without and one with statin will be 
+  # counted as two separate individuals
+  distinct(id, physician, center, source, on_statin, sex) |> 
+  group_by(physician, sex) |> 
+  # Get the number of peoplel overal, and the number of people not on statin
+  summarise(n_overall = n(),
+            n_without_statin = sum(!on_statin), 
+            statin_presc_rate = 1 - n_without_statin/n_overall) |> 
+  ungroup()
+
+# Proportion of eligible women across all clusters
+sex_ratio_df <- df_vpp_sex %>%
+  group_by(physician) %>%
+  summarise(
+    male_count = n_without_statin[sex == 1],
+    female_count = n_without_statin[sex == 2],
+    total_patients = sum(n_without_statin),
+    pct_female = (female_count / total_patients) * 100
+  )
+
+# Mean eligible pct_female across all clusters
+mean_pct_female <- mean(sex_ratio_df$pct_female)
+print(paste("Mean percentage of eligible female across all physician clusters:", 
+            round(mean_pct_female, 2), "%"))
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+[1] "Mean percentage of eligible female across all physician clusters: 35.74 %"
+```
+
+
+:::
+
+```{.r .cell-code}
+# Sex-specific df
+df_vpp_women <- df_vpp_sex |>
+  filter(sex == 2)
+df_vpp_men <- df_vpp_sex |>
+  filter(sex == 1)
 ```
 :::
 
@@ -128,6 +179,10 @@ df_vpp <- df_vpp |>
 ```{.r .cell-code}
 # # Keep only physicians who have at least seen 5 pat in past year
 df_vpp <- df_vpp |>
+  filter(n_without_statin >= 5)
+df_vpp_women <- df_vpp_women |>
+  filter(n_without_statin >= 5)
+df_vpp_men <- df_vpp_men |>
   filter(n_without_statin >= 5)
 
 # Calculate CV for cluster sizes (=physicians)
@@ -151,9 +206,9 @@ cv_tbl |>
   fmt_number(
     columns = c(mean_cluster_size, sd_cluster_size, cv),
     decimals = 2
-  # ) |>
-  # tab_header(
-  #   title = "Coefficient of Variation"
+  ) |>
+  tab_header(
+    title = "Coefficient of Variation ALL participants"
   ) |>
   tab_options(
     table.font.size = 14
@@ -614,6 +669,10 @@ cv_tbl |>
 </style>
 <table class="gt_table" data-quarto-disable-processing="false" data-quarto-bootstrap="false">
   <thead>
+    <tr class="gt_heading">
+      <td colspan="4" class="gt_heading gt_title gt_font_normal gt_bottom_border" style>Coefficient of Variation ALL participants</td>
+    </tr>
+    
     <tr class="gt_col_headings">
       <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1" scope="col" id="n_clusters">Number of Clusters</th>
       <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1" scope="col" id="mean_cluster_size">Mean Cluster Size</th>
@@ -634,6 +693,514 @@ cv_tbl |>
 ```
 
 :::
+
+```{.r .cell-code}
+cv_tbl_women <- df_vpp_women |>
+  summarise(
+    n_clusters = n(),
+    mean_cluster_size = mean(n_without_statin),
+    sd_cluster_size = sd(n_without_statin),
+    cv = sd_cluster_size / mean_cluster_size
+  )
+
+cv_tbl_women |>
+  gt() |>
+  cols_label(
+    n_clusters = "Number of Clusters",
+    mean_cluster_size = "Mean Cluster Size",
+    sd_cluster_size = "SD Cluster Size",
+    cv = "CV"
+  ) |>
+  fmt_number(
+    columns = c(mean_cluster_size, sd_cluster_size, cv),
+    decimals = 2
+  ) |>
+  tab_header(
+    title = "Coefficient of Variation Women"
+  ) |>
+  tab_options(
+    table.font.size = 14
+  )
+```
+
+::: {.cell-output-display}
+
+```{=html}
+<div id="egyqgplmsn" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>#egyqgplmsn table {
+  font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#egyqgplmsn thead, #egyqgplmsn tbody, #egyqgplmsn tfoot, #egyqgplmsn tr, #egyqgplmsn td, #egyqgplmsn th {
+  border-style: none;
+}
+
+#egyqgplmsn p {
+  margin: 0;
+  padding: 0;
+}
+
+#egyqgplmsn .gt_table {
+  display: table;
+  border-collapse: collapse;
+  line-height: normal;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 14px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_caption {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+#egyqgplmsn .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#egyqgplmsn .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 3px;
+  padding-bottom: 5px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#egyqgplmsn .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#egyqgplmsn .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#egyqgplmsn .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#egyqgplmsn .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#egyqgplmsn .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#egyqgplmsn .gt_spanner_row {
+  border-bottom-style: hidden;
+}
+
+#egyqgplmsn .gt_group_heading {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  text-align: left;
+}
+
+#egyqgplmsn .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#egyqgplmsn .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#egyqgplmsn .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#egyqgplmsn .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#egyqgplmsn .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#egyqgplmsn .gt_stub_row_group {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+  vertical-align: top;
+}
+
+#egyqgplmsn .gt_row_group_first td {
+  border-top-width: 2px;
+}
+
+#egyqgplmsn .gt_row_group_first th {
+  border-top-width: 2px;
+}
+
+#egyqgplmsn .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#egyqgplmsn .gt_first_summary_row {
+  border-top-style: solid;
+  border-top-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_first_summary_row.thick {
+  border-top-width: 2px;
+}
+
+#egyqgplmsn .gt_last_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#egyqgplmsn .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_last_grand_summary_row_top {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: double;
+  border-bottom-width: 6px;
+  border-bottom-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#egyqgplmsn .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#egyqgplmsn .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#egyqgplmsn .gt_sourcenote {
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#egyqgplmsn .gt_left {
+  text-align: left;
+}
+
+#egyqgplmsn .gt_center {
+  text-align: center;
+}
+
+#egyqgplmsn .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#egyqgplmsn .gt_font_normal {
+  font-weight: normal;
+}
+
+#egyqgplmsn .gt_font_bold {
+  font-weight: bold;
+}
+
+#egyqgplmsn .gt_font_italic {
+  font-style: italic;
+}
+
+#egyqgplmsn .gt_super {
+  font-size: 65%;
+}
+
+#egyqgplmsn .gt_footnote_marks {
+  font-size: 75%;
+  vertical-align: 0.4em;
+  position: initial;
+}
+
+#egyqgplmsn .gt_asterisk {
+  font-size: 100%;
+  vertical-align: 0;
+}
+
+#egyqgplmsn .gt_indent_1 {
+  text-indent: 5px;
+}
+
+#egyqgplmsn .gt_indent_2 {
+  text-indent: 10px;
+}
+
+#egyqgplmsn .gt_indent_3 {
+  text-indent: 15px;
+}
+
+#egyqgplmsn .gt_indent_4 {
+  text-indent: 20px;
+}
+
+#egyqgplmsn .gt_indent_5 {
+  text-indent: 25px;
+}
+
+#egyqgplmsn .katex-display {
+  display: inline-flex !important;
+  margin-bottom: 0.75em !important;
+}
+
+#egyqgplmsn div.Reactable > div.rt-table > div.rt-thead > div.rt-tr.rt-tr-group-header > div.rt-th-group:after {
+  height: 0px !important;
+}
+</style>
+<table class="gt_table" data-quarto-disable-processing="false" data-quarto-bootstrap="false">
+  <thead>
+    <tr class="gt_heading">
+      <td colspan="4" class="gt_heading gt_title gt_font_normal gt_bottom_border" style>Coefficient of Variation Women</td>
+    </tr>
+    
+    <tr class="gt_col_headings">
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1" scope="col" id="n_clusters">Number of Clusters</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1" scope="col" id="mean_cluster_size">Mean Cluster Size</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1" scope="col" id="sd_cluster_size">SD Cluster Size</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1" scope="col" id="cv">CV</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr><td headers="n_clusters" class="gt_row gt_right">121</td>
+<td headers="mean_cluster_size" class="gt_row gt_right">14.32</td>
+<td headers="sd_cluster_size" class="gt_row gt_right">10.48</td>
+<td headers="cv" class="gt_row gt_right">0.73</td></tr>
+  </tbody>
+  
+  
+</table>
+</div>
+```
+
+:::
 :::
 
 
@@ -645,6 +1212,10 @@ cv_tbl |>
 ```{.r .cell-code}
 # Calculate number of eligible patients who received statins
 df_vpp <- df_vpp |>
+  mutate(n_with_statin = n_overall - n_without_statin)
+df_vpp_women <- df_vpp_women |>
+  mutate(n_with_statin = n_overall - n_without_statin)
+df_vpp_men <- df_vpp_men |>
   mutate(n_with_statin = n_overall - n_without_statin)
 
 # Reconstruct individual patient data (only eligible patients)
@@ -673,6 +1244,38 @@ ind_data <- individual_data |>
     rate = mean(statin_prescribed)
   )
 
+individual_data_women <- df_vpp_women |>
+  rowwise() |>
+  mutate(
+    patient_data = list(
+      tibble(
+        statin_prescribed = c(
+          rep(1, n_with_statin),
+          rep(0, n_without_statin)
+        )
+      )
+    )
+  ) |>
+  ungroup() |>
+  unnest(patient_data) |>
+  select(physician, statin_prescribed)
+
+individual_data_men <- df_vpp_men |>
+  rowwise() |>
+  mutate(
+    patient_data = list(
+      tibble(
+        statin_prescribed = c(
+          rep(1, n_with_statin),
+          rep(0, n_without_statin)
+        )
+      )
+    )
+  ) |>
+  ungroup() |>
+  unnest(patient_data) |>
+  select(physician, statin_prescribed)
+
 # baseline rate
 baseline_rate <- individual_data |>
   summarise(
@@ -689,6 +1292,48 @@ baseline_rate
   baseline_rate
           <dbl>
 1         0.221
+```
+
+
+:::
+
+```{.r .cell-code}
+baseline_rate_women <- individual_data_women |>
+  summarise(
+    baseline_rate_women = mean(statin_prescribed)
+  )
+
+baseline_rate_women
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+# A tibble: 1 × 1
+  baseline_rate_women
+                <dbl>
+1               0.153
+```
+
+
+:::
+
+```{.r .cell-code}
+baseline_rate_men <- individual_data_men |>
+  summarise(
+    baseline_rate_men = mean(statin_prescribed)
+  )
+
+baseline_rate_men
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+# A tibble: 1 × 1
+  baseline_rate_men
+              <dbl>
+1             0.248
 ```
 
 
@@ -714,6 +1359,26 @@ icc(model)
 
 
 :::
+
+```{.r .cell-code}
+model_women <- glmer(statin_prescribed ~ 1 + (1 | physician), 
+               data = individual_data_women, 
+               family = binomial)
+
+icc(model_women)
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+# Intraclass Correlation Coefficient
+
+    Adjusted ICC: 0.024
+  Unadjusted ICC: 0.024
+```
+
+
+:::
 :::
 
 
@@ -727,7 +1392,7 @@ Sample size for the individual randomized trial on the same question
 ```{.r .cell-code}
 # Parameters
 p_C <- 0.22
-p_I <- 0.37
+p_I <- 0.32
 power <- 0.80 
 alpha <- 0.05
 
@@ -739,7 +1404,7 @@ cat("Cohen's h for Intervention vs Control:", round(h_I_C, 3), "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Cohen's h for Intervention vs Control: 0.331 
+Cohen's h for Intervention vs Control: 0.226 
 ```
 
 
@@ -757,7 +1422,7 @@ cat("Sample size per arm:", n_per_arm, "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Sample size per arm: 143 
+Sample size per arm: 308 
 ```
 
 
@@ -770,7 +1435,7 @@ cat("Total trial sample size (2-arm trial):", n_total)
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Total trial sample size (2-arm trial): 286
+Total trial sample size (2-arm trial): 616
 ```
 
 
@@ -788,18 +1453,20 @@ However, let's not forget the cluster size variation. The usual conservative adj
 
 DEFF_cv = 1+((m(1+CV\^2)−1))ICC , whereby CV is the coefficient of variation (ratio of standard deviation of cluster sizes to mean of cluster sizes)
 
+## **(1.1) Global sample size**
+
 
 ::: {.cell}
 
 ```{.r .cell-code}
 # Parameters
 p_C <- 0.22
-p_I <- 0.37  
+p_I <- 0.32  
 power <- 0.80 
 ICC <- 0.10
 alpha <- 0.05
 
-m <- 33 # average cluster size
+m <- 34 # average cluster size
 CV <- 0.95 # CV
 
 deff <- 1+(m-1)*ICC # standard DEFF
@@ -820,7 +1487,7 @@ cat("Cluster sample size one arm:", n_clusters, "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Cluster sample size one arm: 32 
+Cluster sample size one arm: 67 
 ```
 
 
@@ -838,7 +1505,7 @@ cat("Total cluster sample size:", tot_clusters, "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Total cluster sample size: 64 
+Total cluster sample size: 134 
 ```
 
 
@@ -851,7 +1518,7 @@ cat("Total individual sample size:", tot_ind, "\n")
 ::: {.cell-output .cell-output-stdout}
 
 ```
-Total individual sample size: 2054 
+Total individual sample size: 4526 
 ```
 
 
@@ -859,15 +1526,207 @@ Total individual sample size: 2054
 :::
 
 
-## **(1.1) Varying assumptions - Standard sample size calculation**
+## **(1.2) Subgroup sample size**
 
-### **(1.1.1) Varying Effect size and varying ICC**
+### **(1.2.1)** First, check if we could power it for a moderate interaction effect
+
+
+::: {.cell}
+
+```{.r .cell-code}
+# Parameters
+power <- 0.80
+alpha <- 0.05
+ICC <- 0.10
+m <- 34
+CV <- 0.95
+
+prop_w <- 0.36 # proportion women, see calculation above
+prop_m <- 1 - prop_w
+
+# Sex-specific event probabilities (ASSUMPTIONS)
+p_C_w <- 0.15 # see calculation above
+p_C_m <- 0.25 # see calculation above
+p_I_w <- 0.30 # we expect 15 pp among women
+p_I_m <- 0.35 # we expect 10 pp among men
+
+# Treatment effects within sex
+h_w <- ES.h(p1 = p_I_w, p2 = p_C_w)
+h_m <- ES.h(p1 = p_I_m, p2 = p_C_m)
+
+# Interaction effect -> difference in treatment effects
+h_int <- abs(h_w - h_m)
+
+# Individual-level power calculation for interaction (per sex per arm)
+ss_ind_int <- pwr.2p.test(
+  h = h_int,
+  power = power,
+  sig.level = alpha)$n
+
+# Adjust for unequal sex proportions
+# Required individuals per arm (dominated by smaller subgroup)
+ss_ind_adj <- max(
+  ss_ind_int / prop_w,
+  ss_ind_int / prop_m)
+
+# Design effect for cluster randomization, as above
+deff_cv <- 1 + ((m * (1 + CV^2)) - 1) * ICC
+ss_crt <- ceiling(ss_ind_adj * deff_cv)
+
+# Clusters per arm
+n_clusters <- ceiling(ss_crt / m)
+
+cat("Interaction effect (Cohen's h):", round(h_int, 3), "\n")
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+Interaction effect (Cohen's h): 0.145 
+```
+
+
+:::
+
+```{.r .cell-code}
+cat("Individuals per arm (after sex adjustment):", ss_crt, "\n")
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+Individuals per arm (after sex adjustment): 15288 
+```
+
+
+:::
+
+```{.r .cell-code}
+cat("Clusters per arm:", n_clusters, "\n")
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+Clusters per arm: 450 
+```
+
+
+:::
+
+```{.r .cell-code}
+cat("Total clusters:", 2 * n_clusters, "\n")
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+Total clusters: 900 
+```
+
+
+:::
+
+```{.r .cell-code}
+cat("Total individuals:", 2 * ss_crt, "\n")
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+Total individuals: 30576 
+```
+
+
+:::
+:::
+
+
+### **(1.2.2)** Second, check if we can power it for subgroup women alone
+
+With 90% power.
+
+Cluster size is obviously lower, but also less variability (CV lower, ICC lower)
+
+
+::: {.cell}
+
+```{.r .cell-code}
+# Parameters
+p_C <- 0.15
+p_I <- 0.25  
+power <- 0.90
+alpha <- 0.05
+ICC <- 0.05
+m <- 14
+CV <- 0.95
+
+deff <- 1+(m-1)*ICC # standard DEFF
+deff_cv <- 1+((m*(1+CV^2))-1)*ICC # DEFF with cluster size variation
+
+# Effect size
+h_I_C <- ES.h(p1 = p_I, p2 = p_C)
+
+# sample size for corresponding individual RCT 
+ss <- pwr.2p.test(h = h_I_C, power = power, sig.level = alpha)$n
+
+# CRT sample size
+ss_crt <- ceiling(ss * deff_cv)
+n_clusters <- ceiling(ss_crt / m)
+cat("Cluster sample size one arm, women only:", n_clusters, "\n")
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+Cluster sample size one arm, women only: 55 
+```
+
+
+:::
+
+```{.r .cell-code}
+# cat("Individual sample size one arm:", ss_crt, "\n")
+
+# Total
+tot_clusters <- n_clusters * 2
+tot_ind <- ss_crt * 2
+cat("Total cluster sample size, women only:", tot_clusters, "\n")
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+Total cluster sample size, women only: 110 
+```
+
+
+:::
+
+```{.r .cell-code}
+cat("Total individual sample size, women only:", tot_ind, "\n")
+```
+
+::: {.cell-output .cell-output-stdout}
+
+```
+Total individual sample size, women only: 1514 
+```
+
+
+:::
+:::
+
+
+## **(1.3) Varying assumptions - Standard sample size calculation**
+
+### **(1.3.1) Varying Effect size and varying ICC - overall population**
 
 3-D plot, varying the effect size (10 pp to 20 pp) & varying ICC (0.05 to 0.2)
 
 Keep the baseline prescription rate at 22% (control rate)
 
-Keep m (cluster size) at 33
+Keep m (cluster size) at 34
 
 Keep the CV at 0.95
 
@@ -880,7 +1739,7 @@ power <- 0.80
 alpha <- 0.05
 p_C <- 0.22
 CV <- 0.95
-m <- 33
+m <- 34
 
 # Ranges
 ICC_values <- seq(0.05, 0.20, by = 0.01)
@@ -939,7 +1798,7 @@ ggplot(results_3d, aes(x = effect_size_pp, y = ICC, fill = n_clusters_per_arm)) 
     name = "Clusters\nper arm"
   ) +
   labs(
-    title = "Clusters per arm: ICC vs Effect size",
+    title = "Total POP: Clusters per arm: ICC vs Effect size",
     x = "Effect size (percentage point increase)",
     y = "ICC"
   ) +
@@ -953,12 +1812,12 @@ ggplot(results_3d, aes(x = effect_size_pp, y = ICC, fill = n_clusters_per_arm)) 
 ```
 
 ::: {.cell-output-display}
-![](SHCS-CVD-statins_files/figure-html/unnamed-chunk-8-1.png){width=960}
+![](SHCS-CVD-statins_files/figure-html/unnamed-chunk-10-1.png){width=960}
 :::
 :::
 
 
-### **(1.1.2) Varying CV and varying ICC**
+### **(1.3.2) Varying CV and varying ICC - overall population**
 
 3-D plot, varying the CV (0.5 to 1.2) & varying ICC (0.05 to 0.2)
 
@@ -1043,7 +1902,7 @@ ggplot(results_3d, aes(x = CV, y = ICC, fill = n_clusters_per_arm)) +
 ```
 
 ::: {.cell-output-display}
-![](SHCS-CVD-statins_files/figure-html/unnamed-chunk-10-1.png){width=960}
+![](SHCS-CVD-statins_files/figure-html/unnamed-chunk-12-1.png){width=960}
 :::
 :::
 

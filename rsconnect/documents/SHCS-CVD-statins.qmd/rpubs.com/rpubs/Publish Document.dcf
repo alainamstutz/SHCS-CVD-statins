@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/1396629/c2f98be022a7423eb4cfbd44a809e118
+bundleId: https://api.rpubs.com/api/v1/document/1396629/c2f98be022a7423eb4cfbd44a809e118
+url: http://rpubs.com/AlainAmstutz/1396629
+version: 1
